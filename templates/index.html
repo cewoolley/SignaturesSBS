@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COSMIC SBS96 Signature Comparison and Ranking</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 10px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin-top: 0px;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            margin-bottom: 15px;
+        }
+        .options-container {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+        }
+        .option-button {
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .option-button:hover {
+            background-color: #2980b9;
+        }
+        .option-content {
+            display: none;
+            margin-top: 15px;
+        }
+        form {
+            margin-bottom: 15px;
+        }
+        label, select, input {
+            display: block;
+            margin-bottom: 8px;
+        }
+        select, input[type="text"] {
+            width: 100%;
+            padding: 5px;
+        }
+        input[type="submit"], #luckyButton {
+            background-color: #2ecc71;
+            color: #fff;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        input[type="submit"]:hover, #luckyButton:hover {
+            background-color: #27ae60;
+        }
+        #spinnerContainer, #errorContainer {
+            margin-top: 15px;
+        }
+        #plotContainer, #individualPlotsContainer {
+            margin-top: 10px;
+            padding: 0;
+            line-height: 0;
+        }
+
+        #plotContainer img, #individualPlotsContainer img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .individual-plot-container {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .individual-plot-container img {
+            max-width: calc(50% - 2.5px);
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        #plotContainer img, #individualPlotsContainer img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://i.imgur.com/gbO67Oh.png" width=40%>
+            <h1>COSMIC SBS96 Signature Comparison and Ranking</h1>
+            <p class="subtitle">View, compare, and rank <a href="//cancer.sanger.ac.uk/signatures/" target="_blank">COSMIC Signatures (v3.4) SBS 96</a> for quick reference.</p>
+        </div>
+
+        <div class="options-container">
+            <button class="option-button" onclick="showOption('single')">Show Single Signature</button>
+            <button class="option-button" onclick="showOption('rank-context')">Rank by Context</button>
+            <button class="option-button" onclick="showOption('rank-similarity')">Rank by Similarity</button>
+            <button class="option-button" onclick="showOption('compare')">Compare Signatures</button>
+        </div>
+
+        <div id="single" class="option-content">
+            <h3>Plot a single signature...</h3>
+            <form id="singleSignatureForm">
+                <label for="signature_name">Select Signature:</label>
+                <select name="signature_name" id="signature_name">
+                    {% for signature, aetiology in signatures.items() %}
+                    <option value="{{ signature }}">{{ signature }} - {{ aetiology }}</option>
+                    {% endfor %}
+                </select>
+                <input type="submit" value="Plot Signature">
+            </form>
+        </div>
+
+        <div id="compare" class="option-content">
+            <h3>Compare two signatures and generate differential plot...</h3>
+            <form id="subtractForm">
+                <label for="primary_signature">Primary Signature:</label>
+                <select name="primary_signature" id="primary_signature">
+                    {% for signature, aetiology in signatures.items() %}
+                    <option value="{{ signature }}">{{ signature }} - {{ aetiology }}</option>
+                    {% endfor %}
+                </select>
+
+                <label for="secondary_signature">Secondary Signature:</label>
+                <select name="secondary_signature" id="secondary_signature">
+                    {% for signature, aetiology in signatures.items() %}
+                    <option value="{{ signature }}">{{ signature }} - {{ aetiology }}</option>
+                    {% endfor %}
+                </select>
+
+                <input type="submit" value="Compare Selection">
+            </form>
+            <button id="luckyButton">Randomise</button>
+        </div>
+
+        <div id="rank-context" class="option-content">
+            <h3>Rank signatures by 3nt context activity...</h3>
+            <form id="contextForm">
+                <label for="mutation_context">Mutation Context (e.g. T[C>G]A):</label>
+                <input type="text" name="mutation_context" id="mutation_context">
+                <input type="submit" value="Rank Signatures">
+            </form>
+        </div>
+
+        <div id="rank-similarity" class="option-content">
+            <h3>Rank signatures by cosine similarity to a reference...</h3>
+            <form id="similarityForm">
+                <label for="reference_signature">Reference Signature:</label>
+                <select name="reference_signature" id="reference_signature">
+                    {% for signature, aetiology in signatures.items() %}
+                    <option value="{{ signature }}">{{ signature }} - {{ aetiology }}</option>
+                    {% endfor %}
+                </select>
+                <input type="submit" value="Rank by Similarity">
+            </form>
+        </div>
+
+        <div id="spinnerContainer"></div>
+        <div id="errorContainer"></div>
+        <div id="plotContainer"></div>
+        <div id="individualPlotsContainer"></div>
+
+
+
+
+
+
+    <script>
+        $(document).ready(function() {
+            var contexts = [
+                "A[C>A]A", "A[C>A]C", "A[C>A]G", "A[C>A]T",
+                "A[C>G]A", "A[C>G]C", "A[C>G]G", "A[C>G]T",
+                "A[C>T]A", "A[C>T]C", "A[C>T]G", "A[C>T]T",
+                "A[T>A]A", "A[T>A]C", "A[T>A]G", "A[T>A]T",
+                "A[T>C]A", "A[T>C]C", "A[T>C]G", "A[T>C]T",
+                "A[T>G]A", "A[T>G]C", "A[T>G]G", "A[T>G]T",
+                "C[C>A]A", "C[C>A]C", "C[C>A]G", "C[C>A]T",
+                "C[C>G]A", "C[C>G]C", "C[C>G]G", "C[C>G]T",
+                "C[C>T]A", "C[C>T]C", "C[C>T]G", "C[C>T]T",
+                "C[T>A]A", "C[T>A]C", "C[T>A]G", "C[T>A]T",
+                "C[T>C]A", "C[T>C]C", "C[T>C]G", "C[T>C]T",
+                "C[T>G]A", "C[T>G]C", "C[T>G]G", "C[T>G]T",
+                "G[C>A]A", "G[C>A]C", "G[C>A]G", "G[C>A]T",
+                "G[C>G]A", "G[C>G]C", "G[C>G]G", "G[C>G]T",
+                "G[C>T]A", "G[C>T]C", "G[C>T]G", "G[C>T]T",
+                "G[T>A]A", "G[T>A]C", "G[T>A]G", "G[T>A]T",
+                "G[T>C]A", "G[T>C]C", "G[T>C]G", "G[T>C]T",
+                "G[T>G]A", "G[T>G]C", "G[T>G]G", "G[T>G]T",
+                "T[C>A]A", "T[C>A]C", "T[C>A]G", "T[C>A]T",
+                "T[C>G]A", "T[C>G]C", "T[C>G]G", "T[C>G]T",
+                "T[C>T]A", "T[C>T]C", "T[C>T]G", "T[C>T]T",
+                "T[T>A]A", "T[T>A]C", "T[T>A]G", "T[T>A]T",
+                "T[T>C]A", "T[T>C]C", "T[T>C]G", "T[T>C]T",
+                "T[T>G]A", "T[T>G]C", "T[T>G]G", "T[T>G]T"
+            ];
+            $('#mutation_context').autocomplete({
+                source: contexts
+            });
+
+            $('#subtractForm').submit(function(event) {
+                event.preventDefault();
+                submitForm($(this));
+            });
+
+            $('#luckyButton').click(function(event) {
+                event.preventDefault();
+                var primarySignature = $('#primary_signature option').eq(Math.floor(Math.random() * $('#primary_signature option').length)).val();
+                var secondarySignature = $('#secondary_signature option').eq(Math.floor(Math.random() * $('#secondary_signature option').length)).val();
+                $('#primary_signature').val(primarySignature);
+                $('#secondary_signature').val(secondarySignature);
+                submitForm($('#subtractForm'));
+            });
+
+            $('#contextForm').submit(function(event) {
+                event.preventDefault();
+                submitContextForm($(this));
+            });
+
+            $('#similarityForm').submit(function(event) {
+                event.preventDefault();
+                submitSimilarityForm($(this));
+            });
+
+            
+            $('#singleSignatureForm').submit(function(event) {
+                event.preventDefault();
+                submitSingleSignatureForm($(this));
+            });
+
+            function submitSingleSignatureForm(form) {
+                var formData = form.serialize();
+                $.ajax({
+                    url: '/single_signature',
+                    type: 'POST',
+                    data: formData,
+                    beforeSend: function() {
+                        $('#spinnerContainer').html('<div class="spinner"></div>').show();
+                        $('#plotContainer').html('');
+                        $('#individualPlotsContainer').html('');
+                    },
+                    success: function(response) {
+                        $('#plotContainer').html('<img src="data:image/png;base64,' + response.plot_base64 + '" alt="Single Signature Plot" style="width: 100%; height: auto;">');
+                    },
+                    complete: function() {
+                        $('#spinnerContainer').hide();
+                    }
+                });
+            }
+
+
+
+
+            function submitForm(form) {
+                var formData = form.serialize();
+                $.ajax({
+                    url: '/plot',
+                    type: 'POST',
+                    data: formData,
+                    beforeSend: function() {
+                        $('#spinnerContainer').html('<div class="spinner"></div>').show();
+                    },
+                    success: function(response) {
+                        $('#plotContainer').html('<img src="data:image/png;base64,' + response.plot_base64 + '" alt="Subtracted Signature Plot" style="width: 100%; height: auto;">');
+                        $('#individualPlotsContainer').html('<div class="individual-plot-container"><img src="data:image/png;base64,' + response.primary_sig_plot + '" alt="Primary Signature Plot" style="width: 50%; height: auto;"><img src="data:image/png;base64,' + response.secondary_sig_plot + '" alt="Secondary Signature Plot" style="width: 50%; height: auto;"></div>');
+                        $('#spinnerContainer').hide();
+                    },
+                    complete: function() {
+                        $('#spinnerContainer').hide();
+                    }
+                });
+            }
+
+            function submitContextForm(form) {
+                var formData = form.serialize();
+                $('#spinnerContainer').html('<div class="spinner"></div>').show();
+                $('#errorContainer').html('');
+                $('#individualPlotsContainer').html('');
+                $.ajax({
+                    url: '/context',
+                    type: 'POST',
+                    data: formData,
+                    beforeSend: function() {
+                        $('#plotContainer').html('');
+                    },
+                    success: function(response) {
+                        if (response.error) {
+                            $('#errorContainer').html('<p>' + response.error + '</p>');
+                        } else {
+                            $('#plotContainer').html('<img src="data:image/png;base64,' + response.plot_base64 + '" alt="Ranked Signatures Plot" style="width: 100%; height: auto;">');
+                        }
+                    },
+                    complete: function() {
+                        $('#spinnerContainer').hide();
+                    }
+                });
+            }
+
+            function submitSimilarityForm(form) {
+                var formData = form.serialize();
+                $('#spinnerContainer').html('<div class="spinner"></div>').show();
+                $('#errorContainer').html('');
+                $('#individualPlotsContainer').html('');
+                $.ajax({
+                    url: '/similarity',
+                    type: 'POST',
+                    data: formData,
+                    beforeSend: function() {
+                        $('#plotContainer').html('');
+                    },
+                    success: function(response) {
+                        if (response.error) {
+                            $('#errorContainer').html('<p>' + response.error + '</p>');
+                        } else {
+                            $('#plotContainer').html('<img src="data:image/png;base64,' + response.plot_base64 + '" alt="Similarity Ranked Signatures Plot" style="width: 100%; height: auto;">');
+                        }
+                    },
+                    complete: function() {
+                        $('#spinnerContainer').hide();
+                    }
+                });
+            }
+        });
+
+        function showOption(optionId) {
+            $('.option-content').hide();
+            $('#' + optionId).show();
+        }
+    </script>
+    </div>
+    
+    <div class="footer">
+        <h6>(Version 22/07/24)</h6> 
+    </div>
+
+</body>
+</html>
