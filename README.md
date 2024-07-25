@@ -17,7 +17,7 @@ A Flask web application for analysing and visualising COSMIC mutational signatur
    ```
    pip install flask pandas matplotlib seaborn numpy scipy
    ```
-3. Place the `COSMIC_v3.4_SBS_GRCh38.tsv` file in the project directory
+3. Ensure the `COSMIC_v3.4_SBS_GRCh38.tsv` is in the project directory. `similarity_matrix.csv` is calculated on first-run if not found.
 4. Run the app:
    ```
    python app.py
@@ -33,6 +33,6 @@ A Flask web application for analysing and visualising COSMIC mutational signatur
 
 This app uses COSMIC v3.4 Single Base Substitution (SBS) signatures. For more information, visit the [COSMIC Mutational Signatures website](https://cancer.sanger.ac.uk/signatures/).
 
-## Licence
+## Live Version
 
-[MIT Licence](LICENCE)
+The web-app is currently hosted online at [Signatures.SBS](http://signatures.sbs) via PythonAnywhere.
