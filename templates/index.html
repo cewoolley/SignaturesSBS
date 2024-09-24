@@ -158,7 +158,7 @@
         <div class="header">
             <img src="https://i.imgur.com/gbO67Oh.png" width=40%>
             <h1>COSMIC SBS96 Signature Comparison and Ranking</h1>
-            <p class="subtitle">View, compare, and rank <a href="//cancer.sanger.ac.uk/signatures/" target="_blank">COSMIC Signatures (v3.4) SBS 96</a> for quick reference.</p>
+            <p class="subtitle">View, compare, and rank <a href="//cancer.sanger.ac.uk/signatures/" target="_blank">COSMIC SBS96 Signatures (v3.4)</a>, and <a href="https://cancer.sanger.ac.uk/signatures/experimental/">Experimental Signatures (V1.0)</a> for quick reference.</p>
         </div>
 
         <div class="options-container">
@@ -171,6 +171,12 @@
         <div id="single" class="option-content">
             <h3>Plot a single signature...</h3>
             <form id="singleSignatureForm">
+                <label for="signature_group">Signature Group:</label>
+                <select name="signature_group" id="signature_group" class="signature-group-select">
+                    <option value="COSMIC">COSMIC</option>
+                    <option value="Experimental">Experimental</option>
+                    <option value="Combined">Combined</option>
+                </select>
                 <label for="signature_name">Select Signature:</label>
                 <select name="signature_name" id="signature_name">
                     {% for signature, aetiology in signatures.items() %}
@@ -184,6 +190,12 @@
         <div id="compare" class="option-content">
             <h3>Compare two signatures and generate differential plot...</h3>
             <form id="subtractForm">
+                <label for="signature_group">Signature Group:</label>
+                <select name="signature_group" id="compare_signature_group" class="signature-group-select">
+                    <option value="COSMIC">COSMIC</option>
+                    <option value="Experimental">Experimental</option>
+                    <option value="Combined">Combined</option>
+                </select>
                 <label for="primary_signature">Primary Signature:</label>
                 <select name="primary_signature" id="primary_signature">
                     {% for signature, aetiology in signatures.items() %}
@@ -206,6 +218,12 @@
         <div id="rank-context" class="option-content">
             <h3>Rank signatures by 3nt context activity...</h3>
             <form id="contextForm">
+                <label for="signature_group">Signature Group:</label>
+                <select name="signature_group" id="context_signature_group" class="signature-group-select">
+                    <option value="COSMIC">COSMIC</option>
+                    <option value="Experimental">Experimental</option>
+                    <option value="Combined">Combined</option>
+                </select>
                 <label for="mutation_context">Mutation Context (e.g. T[C>G]A):</label>
                 <input type="text" name="mutation_context" id="mutation_context">
                 <input type="submit" value="Rank Signatures">
@@ -215,6 +233,12 @@
         <div id="rank-similarity" class="option-content">
             <h3>Rank signatures by cosine similarity to a reference...</h3>
             <form id="similarityForm">
+                <label for="signature_group">Signature Group:</label>
+                <select name="signature_group" id="similarity_signature_group" class="signature-group-select">
+                    <option value="COSMIC">COSMIC</option>
+                    <option value="Experimental">Experimental</option>
+                    <option value="Combined">Combined</option>
+                </select>
                 <label for="reference_signature">Reference Signature:</label>
                 <select name="reference_signature" id="reference_signature">
                     {% for signature, aetiology in signatures.items() %}
@@ -267,6 +291,29 @@
                 source: contexts
             });
 
+            // Add this new function to update signature options based on selected group
+            function updateSignatureOptions(groupSelect, signatureSelect) {
+                var selectedGroup = groupSelect.val();
+                var signatures = {{ signature_groups | tojson | safe }};
+                var options = signatures[selectedGroup];
+                
+                signatureSelect.empty();
+                $.each(options, function(i, signature) {
+                    signatureSelect.append($('<option></option>').val(signature).text(signature));
+                });
+            }
+
+            // Update signature options when group is changed
+            $('.signature-group-select').change(function() {
+                var form = $(this).closest('form');
+                updateSignatureOptions($(this), form.find('select:not(.signature-group-select)'));
+            });
+
+            // Initialize signature options
+            $('.signature-group-select').each(function() {
+                updateSignatureOptions($(this), $(this).closest('form').find('select:not(.signature-group-select)'));
+            });
+
             $('#subtractForm').submit(function(event) {
                 event.preventDefault();
                 submitForm($(this));
@@ -274,8 +321,10 @@
 
             $('#luckyButton').click(function(event) {
                 event.preventDefault();
-                var primarySignature = $('#primary_signature option').eq(Math.floor(Math.random() * $('#primary_signature option').length)).val();
-                var secondarySignature = $('#secondary_signature option').eq(Math.floor(Math.random() * $('#secondary_signature option').length)).val();
+                var signatureGroup = $('#compare_signature_group').val();
+                var signatures = {{ signature_groups | tojson | safe }}[signatureGroup];
+                var primarySignature = signatures[Math.floor(Math.random() * signatures.length)];
+                var secondarySignature = signatures[Math.floor(Math.random() * signatures.length)];
                 $('#primary_signature').val(primarySignature);
                 $('#secondary_signature').val(secondarySignature);
                 submitForm($('#subtractForm'));
@@ -291,12 +340,12 @@
                 submitSimilarityForm($(this));
             });
 
-            
             $('#singleSignatureForm').submit(function(event) {
                 event.preventDefault();
                 submitSingleSignatureForm($(this));
             });
 
+            // Update the existing functions to include signature_group
             function submitSingleSignatureForm(form) {
                 var formData = form.serialize();
                 $.ajax({
@@ -316,9 +365,6 @@
                     }
                 });
             }
-
-
-
 
             function submitForm(form) {
                 var formData = form.serialize();
@@ -397,7 +443,7 @@
         }
     </script>
     </div>
-    
+
     <div class="footer">
         <a href="https://github.com/cewoolley/SignaturesSBS" class="github-link" target="_blank" rel="noopener noreferrer">
             <svg class="github-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">
