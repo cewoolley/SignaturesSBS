@@ -11,6 +11,12 @@ import io
 import numpy as np
 import base64
 from scipy.spatial.distance import cosine
+import logging
+from datetime import datetime
+
+# Set up logging
+logging.basicConfig(filename='app_usage.log', level=logging.INFO,
+                    format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 app = Flask(__name__)
 
@@ -606,6 +612,9 @@ def generate_plot():
     secondary_signature = request.form['secondary_signature']
     signature_group = request.form['signature_group']
     
+    # Log the plot request
+    logging.info(f"Plot request: {primary_signature} - {secondary_signature} ({signature_group})")
+    
     if signature_group == 'COSMIC':
         current_data = data
     elif signature_group == 'Experimental':
@@ -621,6 +630,9 @@ def generate_plot():
 def get_context_ranking():
     mutation_context = request.form['mutation_context']
     signature_group = request.form['signature_group']
+    
+    # Log the context ranking request
+    logging.info(f"Context ranking request: {mutation_context} ({signature_group})")
     
     if signature_group == 'COSMIC':
         current_data = data
@@ -638,6 +650,9 @@ def get_similarity_ranking():
     reference_signature = request.form['reference_signature']
     signature_group = request.form['signature_group']
     
+    # Log the similarity ranking request
+    logging.info(f"Similarity ranking request: {reference_signature} ({signature_group})")
+    
     if signature_group == 'COSMIC':
         current_data = data
     elif signature_group == 'Experimental':
@@ -653,6 +668,9 @@ def get_similarity_ranking():
 def get_single_signature():
     signature_name = request.form['signature_name']
     signature_group = request.form['signature_group']
+    
+    # Log the single signature request
+    logging.info(f"Single signature request: {signature_name} ({signature_group})")
     
     if signature_group == 'COSMIC':
         current_data = data
