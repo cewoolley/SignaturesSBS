@@ -17,11 +17,14 @@ app = Flask(__name__)
 # Load the data from the TSV file
 data = pd.read_csv('COSMIC_v3.4_SBS_GRCh38.tsv', sep='\t', index_col=0)
 
+# Load the experimental data from the TSV file
+experimental_data = pd.read_csv('human_sbs96_filtered_v1_0.txt', sep='\t', index_col=0)
+
+# Combine the data
+combined_data = pd.concat([data, experimental_data], axis=1)
+
 # File to store the pre computed similarity matrix
 SIMILARITY_MATRIX_FILE = 'similarity_matrix.csv'
-
-
-
 
 
 # sig groups for colour coding
@@ -49,11 +52,14 @@ color_map = {
     'Environmental exposures': '#FF6666',
     'ROS damage': '#66FF66',
     'Unknown': '#CCCCCC',
-    'Artefact': '#000000'
+    'Artefact': '#000000',
+    'Experimental': '#FFFFFF'  # White background for hatching
 }
 # func to work out what group a sig is in
 def get_signature_group(signature):
-    if signature in clock_like:
+    if signature in experimental_data.columns:
+        return 'Experimental'
+    elif signature in clock_like:
         return 'Clock-like'
     elif signature in apobec_aid_activity:
         return 'APOBEC and AID activity'
@@ -89,15 +95,21 @@ def compute_similarity_matrix(data):
     return pd.DataFrame(similarity_matrix, index=data.columns, columns=data.columns)
 
 def get_similarity_matrix():
+    global combined_data  # Add this line to access the combined_data
     if os.path.exists(SIMILARITY_MATRIX_FILE):
         print("Loading pre-computed similarity matrix from file...")
-        return pd.read_csv(SIMILARITY_MATRIX_FILE, index_col=0)
-    else:
-        print("Computing similarity matrix...")
-        similarity_matrix = compute_similarity_matrix(data)
-        print("Saving similarity matrix to file...")
-        similarity_matrix.to_csv(SIMILARITY_MATRIX_FILE)
-        return similarity_matrix
+        similarity_matrix = pd.read_csv(SIMILARITY_MATRIX_FILE, index_col=0)
+        # Check if all signatures are present in the loaded matrix
+        if set(combined_data.columns) == set(similarity_matrix.columns):
+            return similarity_matrix
+        else:
+            print("Existing similarity matrix is outdated. Recomputing...")
+    
+    print("Computing similarity matrix...")
+    similarity_matrix = compute_similarity_matrix(combined_data)
+    print("Saving similarity matrix to file...")
+    similarity_matrix.to_csv(SIMILARITY_MATRIX_FILE)
+    return similarity_matrix
 
 # Load or compute the similarity matrix
 similarity_matrix = get_similarity_matrix()
@@ -206,7 +218,7 @@ contexts96order = [
     "T[T>G]T",
 ]
 
-global signatures 
+global signatures
 signatures = {
     'SBS1': 'Spontaneous deamination of 5-methylcytosine (clock-like signature)',
     'SBS2': 'Activity of APOBEC family of cytidine deaminases',
@@ -296,9 +308,20 @@ signatures = {
     "SBS95": "Artefact"
 }
 
+# Add experimental signatures
+for sig in experimental_data.columns:
+    if sig not in signatures:
+        signatures[sig] = f"Experimental Signature {sig}"
 
-def plot_single_signature(signature_name):
-    signature = data[signature_name]
+# Create a dictionary to separate COSMIC and experimental signatures
+signature_groups = {
+    'COSMIC': list(data.columns),
+    'Experimental': list(experimental_data.columns),
+    'Combined': list(combined_data.columns)
+}
+
+def plot_single_signature(signature_name, current_data):
+    signature = current_data[signature_name]
     df = pd.DataFrame({'Proportion': signature})
     df['MutationType'] = df.index.str.extract(r'\[(\w>\w)\]', expand=False)
     df = df.reindex(contexts96order)
@@ -319,7 +342,7 @@ def plot_single_signature(signature_name):
     ax.set_title(f'COSMIC Signature {signature_name}')
     ax.legend(title='Mutation Types', loc='upper right')
     plt.xticks(range(len(contexts96order)), contexts96order, rotation=90)
-    plt.xticks(fontsize=8)  
+    plt.xticks(fontsize=8)
     plt.subplots_adjust(bottom=0.2)
 
     labels = ax.get_xticklabels()
@@ -336,7 +359,7 @@ def plot_single_signature(signature_name):
 
 
 
-def plot_signature(signature, primary_sig, secondary_sig, title):
+def plot_signature(signature, primary_sig, secondary_sig, title, current_data):
     # Create a DataFrame from the signature Series
     df = pd.DataFrame({'Proportion': signature})
     # Extract mutation types from the index using regular expressions
@@ -355,10 +378,7 @@ def plot_signature(signature, primary_sig, secondary_sig, title):
     df = df.reindex(contexts96order)
 
     # Calculate cosine similarity
-    #primary_sig_values = data[primary_sig].values
-    #secondary_sig_values = data[secondary_sig].values
     cosine_sim = similarity_matrix.loc[primary_sig, secondary_sig]
-    #cosine_sim = 1 - cosine(primary_sig_values, secondary_sig_values)
 
     # Create a new figure
     fig, ax = plt.subplots(figsize=(20, 6))
@@ -409,10 +429,10 @@ def plot_signature(signature, primary_sig, secondary_sig, title):
     plt.close(fig)
 
     # Plot for the primary signature
-    primary_sig_plot = plot_individual_signature(data[primary_sig], primary_sig, primary_sig)
+    primary_sig_plot = plot_individual_signature(current_data[primary_sig], primary_sig, primary_sig)
 
     # Plot for the secondary signature
-    secondary_sig_plot = plot_individual_signature(data[secondary_sig], secondary_sig, secondary_sig)
+    secondary_sig_plot = plot_individual_signature(current_data[secondary_sig], secondary_sig, secondary_sig)
 
     return plot_base64, primary_sig_plot, secondary_sig_plot
 
@@ -462,21 +482,28 @@ def plot_individual_signature(signature, sig_name, title):
     plt.close(fig)
     return plot_base64
 
-def rank_signatures_by_context(mutation_context):
-    context_row = data.loc[mutation_context]
+def rank_signatures_by_context(mutation_context, current_data):
+    context_row = current_data.loc[mutation_context]
     sorted_row = context_row.sort_values(ascending=False)
     ranked_signatures_df = pd.DataFrame({'Proportion': sorted_row.values}, index=sorted_row.index)
     return ranked_signatures_df
 
 def plot_ranked_signatures(ranked_signatures_df, mutation_context):
-    
-    global signatures
-    
     fig, ax = plt.subplots(figsize=(20, 6))
 
-    colors = [color_map[get_signature_group(sig)] for sig in ranked_signatures_df.index]
+    colors = []
+    hatches = []
+    for sig in ranked_signatures_df.index:
+        group = get_signature_group(sig)
+        colors.append(color_map[group])
+        hatches.append('//' if group == 'Experimental' else '')
 
-    sns.barplot(x=ranked_signatures_df.index, y='Proportion', data=ranked_signatures_df, ax=ax, palette=colors)
+    bars = ax.bar(ranked_signatures_df.index, ranked_signatures_df['Proportion'], color=colors, edgecolor='black', linewidth=1)
+
+    # Apply hatching to experimental signatures
+    for bar, hatch in zip(bars, hatches):
+        bar.set_hatch(hatch)
+
     ax.set_xlabel('Signature')
     ax.set_ylabel('Proportion')
     ax.set_title(f'COSMIC_v3.4_SBS_GRCh38 Signatures Ranked by Proportion of {mutation_context} activity')
@@ -497,9 +524,9 @@ def plot_ranked_signatures(ranked_signatures_df, mutation_context):
     ax.add_artist(at)
 
     # Add legend
-    handles = [plt.Rectangle((0,0),1,1, color=color) for color in color_map.values()]
+    handles = [plt.Rectangle((0,0),1,1, color=color, hatch=('//' if group == 'Experimental' else '')) 
+               for group, color in color_map.items()]
     plt.legend(handles, color_map.keys(), title="Aetiology Groups", loc='center left', bbox_to_anchor=(1, 0.5))
-
 
     # Save the plot to a bytes buffer
     buf = io.BytesIO()
@@ -511,17 +538,30 @@ def plot_ranked_signatures(ranked_signatures_df, mutation_context):
     plt.close(fig)
     return plot_base64
 
-def rank_signatures_by_similarity(reference_signature):
-    similarities = similarity_matrix[reference_signature]
+def rank_signatures_by_similarity(reference_signature, current_data):
+    # Filter the similarity matrix to include only the columns present in current_data
+    filtered_similarity_matrix = similarity_matrix.loc[current_data.columns, current_data.columns]
+    
+    similarities = filtered_similarity_matrix[reference_signature]
     ranked_signatures = similarities.sort_values(ascending=False)
     return ranked_signatures
 
 def plot_ranked_signatures_by_similarity(ranked_signatures, reference_signature):
     fig, ax = plt.subplots(figsize=(20, 6))
 
-    colors = [color_map[get_signature_group(sig)] for sig in ranked_signatures.index]
+    colors = []
+    hatches = []
+    for sig in ranked_signatures.index:
+        group = get_signature_group(sig)
+        colors.append(color_map[group])
+        hatches.append('//' if group == 'Experimental' else '')
 
-    sns.barplot(x=ranked_signatures.index, y=ranked_signatures.values, ax=ax, palette=colors)
+    bars = ax.bar(ranked_signatures.index, ranked_signatures.values, color=colors, edgecolor='black', linewidth=1)
+
+    # Apply hatching to experimental signatures
+    for bar, hatch in zip(bars, hatches):
+        bar.set_hatch(hatch)
+
     ax.set_xlabel('Signature')
     ax.set_ylabel('Cosine Similarity')
     ax.set_title(f'COSMIC_v3.4_SBS_GRCh38 Signatures Ranked by Similarity to {reference_signature}')
@@ -535,12 +575,13 @@ def plot_ranked_signatures_by_similarity(ranked_signatures, reference_signature)
     highest_signature_aetiology = signatures[highest_signature]
 
 
-    at = AnchoredText(f'Most similar: {highest_signature} ({highest_signature_aetiology}) (Cosine Similarity: {highest_similarity:.4f})', 
+    at = AnchoredText(f'Most similar: {highest_signature} ({highest_signature_aetiology}) (Cosine Similarity: {highest_similarity:.4f})',
                       prop=dict(size=10), frameon=True, loc='upper right')
     ax.add_artist(at)
 
     # Add legend
-    handles = [plt.Rectangle((0,0),1,1, color=color) for color in color_map.values()]
+    handles = [plt.Rectangle((0,0),1,1, color=color, hatch=('//' if group == 'Experimental' else '')) 
+               for group, color in color_map.items()]
     plt.legend(handles, color_map.keys(), title="Aetiology Groups", loc='center left', bbox_to_anchor=(1, 0.5))
 
     # Add line after the first point (reference signature)
@@ -556,39 +597,71 @@ def plot_ranked_signatures_by_similarity(ranked_signatures, reference_signature)
 
 @app.route('/')
 def index():
-
-    global signatures
-
-    return render_template('index.html', signatures=signatures)
+    global signatures, signature_groups
+    return render_template('index.html', signatures=signatures, signature_groups=signature_groups)
 
 @app.route('/plot', methods=['POST'])
 def generate_plot():
     primary_signature = request.form['primary_signature']
     secondary_signature = request.form['secondary_signature']
-    subtracted_signature = subtract_signatures(primary_signature, secondary_signature)
-    plot_base64, primary_sig_plot, secondary_sig_plot = plot_signature(subtracted_signature, primary_signature, secondary_signature, f'{primary_signature} - {secondary_signature}')
+    signature_group = request.form['signature_group']
+    
+    if signature_group == 'COSMIC':
+        current_data = data
+    elif signature_group == 'Experimental':
+        current_data = experimental_data
+    else:
+        current_data = combined_data
+    
+    subtracted_signature = current_data[primary_signature] - current_data[secondary_signature]
+    plot_base64, primary_sig_plot, secondary_sig_plot = plot_signature(subtracted_signature, primary_signature, secondary_signature, f'{primary_signature} - {secondary_signature}', current_data)
     return jsonify({'plot_base64': plot_base64, 'primary_sig_plot': primary_sig_plot, 'secondary_sig_plot': secondary_sig_plot})
 
 @app.route('/context', methods=['POST'])
 def get_context_ranking():
     mutation_context = request.form['mutation_context']
-    ranked_signatures_df = rank_signatures_by_context(mutation_context)
+    signature_group = request.form['signature_group']
+    
+    if signature_group == 'COSMIC':
+        current_data = data
+    elif signature_group == 'Experimental':
+        current_data = experimental_data
+    else:
+        current_data = combined_data
+    
+    ranked_signatures_df = rank_signatures_by_context(mutation_context, current_data)
     plot_base64 = plot_ranked_signatures(ranked_signatures_df, mutation_context)
     return jsonify({'plot_base64': plot_base64})
-
 
 @app.route('/similarity', methods=['POST'])
 def get_similarity_ranking():
     reference_signature = request.form['reference_signature']
-    ranked_signatures = rank_signatures_by_similarity(reference_signature)
+    signature_group = request.form['signature_group']
+    
+    if signature_group == 'COSMIC':
+        current_data = data
+    elif signature_group == 'Experimental':
+        current_data = experimental_data
+    else:
+        current_data = combined_data
+    
+    ranked_signatures = rank_signatures_by_similarity(reference_signature, current_data)
     plot_base64 = plot_ranked_signatures_by_similarity(ranked_signatures, reference_signature)
     return jsonify({'plot_base64': plot_base64})
-
 
 @app.route('/single_signature', methods=['POST'])
 def get_single_signature():
     signature_name = request.form['signature_name']
-    plot_base64 = plot_single_signature(signature_name)
+    signature_group = request.form['signature_group']
+    
+    if signature_group == 'COSMIC':
+        current_data = data
+    elif signature_group == 'Experimental':
+        current_data = experimental_data
+    else:
+        current_data = combined_data
+    
+    plot_base64 = plot_single_signature(signature_name, current_data)
     return jsonify({'plot_base64': plot_base64})
 
 
